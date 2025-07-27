@@ -115,21 +115,23 @@ except Exception as e:
     db = None
     MONGODB_CONNECTED = False
 
-companies_collection = db.companies
-claims_collection = db.claims
-verifications_collection = db.verifications
-user_submissions_collection = db.user_submissions
-alternatives_collection = db.alternatives
-users_collection = db.users
-website_analyses_collection = db.website_analyses
-
-certification_verifier = None
-emissions_verifier = None
-verifications_collection = None
-user_submissions_collection = None
-alternatives_collection = None
-users_collection = None
-website_analyses_collection = None
+if MONGODB_CONNECTED:
+    companies_collection = db.companies
+    claims_collection = db.claims
+    verifications_collection = db.verifications
+    user_submissions_collection = db.user_submissions
+    alternatives_collection = db.alternatives
+    users_collection = db.users
+    website_analyses_collection = db.website_analyses
+else:
+    companies_collection = None
+    claims_collection = None
+    verifications_collection = None
+    user_submissions_collection = None
+    alternatives_collection = None
+    users_collection = None
+    website_analyses_collection = None
+    logger.info(" Database collections set to None - using fallback storage")
 
 
 if ENHANCED_VERIFICATION_AVAILABLE:
