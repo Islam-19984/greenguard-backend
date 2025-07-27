@@ -102,7 +102,7 @@ MONGO_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017/")
 DATABASE_NAME = os.getenv("DATABASE_NAME", "greenguard_db")
 
 try:
-    client = MongoClient(MONGO_URI)
+   client = MongoClient(MONGO_URI, tls=True, tlsAllowInvalidCertificates=True)
     db = client[DATABASE_NAME]
     client.admin.command("ismaster")
     logger.info(" Connected to MongoDB successfully")
