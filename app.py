@@ -68,6 +68,8 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+TEMP_USERS = {}
+MONGODB_CONNECTED = False
 
 
 @app.after_request
@@ -108,7 +110,10 @@ try:
     logger.info(" Connected to MongoDB successfully")
 except Exception as e:
     logger.error(f" Failed to connect to MongoDB: {e}")
-    exit(1)
+    logger.info(" Running without MongoDB - Using temporary storage")
+    client = None
+    db = None
+    MONGODB_CONNECTED = False
 
 companies_collection = db.companies
 claims_collection = db.claims
@@ -120,6 +125,12 @@ website_analyses_collection = db.website_analyses
 
 certification_verifier = None
 emissions_verifier = None
+verifications_collection = None
+user_submissions_collection = None
+alternatives_collection = None
+users_collection = None
+website_analyses_collection = None
+
 
 if ENHANCED_VERIFICATION_AVAILABLE:
     try:
@@ -2378,32 +2389,25 @@ def register_user():
         if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", email):
             return jsonify({"error": "Invalid email format"}), 400
 
-        existing_user = users_collection.find_one({"email": email})
-        if existing_user:
+        if email in TEMP_USERS:
             return jsonify({"error": "User already exists"}), 409
 
-        user_data = {
+        TEMP_USERS[email] = {
             "email": email,
             "password": password,
-            "created_at": datetime.utcnow(),
+            "created_at": datetime.utcnow().isoformat(),
             "is_active": True,
-            "profile": {
-                "name": email.split("@")[0],
-                "preferences": {"notifications": True,
-                                "analysis_level": "medium"},
-            },
+            "id": f"temp_{len(TEMP_USERS) + 1}"
         }
-
-        result = users_collection.insert_one(user_data)
 
         user_response = {
-            "id": str(result.inserted_id),
+            "id": TEMP_USERS[email]["id"],
             "email": email,
-            "name": user_data["profile"]["name"],
-            "created_at": user_data["created_at"].isoformat(),
+            "name": email.split("@")[0],
+            "created_at": TEMP_USERS[email]["created_at"],
         }
 
-        logger.info(f"👤 New user registered: {email}")
+        logger.info(f"👤 New user registered (temporary): {email}")
 
         return jsonify({
             "success": True,
@@ -2412,10 +2416,8 @@ def register_user():
         }), 201
 
     except Exception as e:
-        logger.error(f" Registration error: {str(e)}")
-        return jsonify({"error": "Registration failed",
-                        "details": str(e)}), 500
-
+        logger.error(f"Registration error: {str(e)}")
+        return jsonify({"error": "Registration failed"}), 500
 
 @app.route("/api/auth/login", methods=["POST"])
 def login_user():
@@ -2428,28 +2430,25 @@ def login_user():
         email = data["email"].lower().strip()
         password = data["password"]
 
-        user = users_collection.find_one({"email": email})
-        if not user:
+        if email not in TEMP_USERS:
             return jsonify({"error": "Invalid credentials"}), 401
 
-        if user["password"] != password:
+        if TEMP_USERS[email]["password"] != password:
             return jsonify({"error": "Invalid credentials"}), 401
 
-        if not user.get("is_active", True):
+        if not TEMP_USERS[email].get("is_active", True):
             return jsonify({"error": "Account is deactivated"}), 401
 
-        users_collection.update_one(
-            {"_id": user["_id"]}, {"$set": {"last_login": datetime.utcnow()}}
-        )
+        TEMP_USERS[email]["last_login"] = datetime.utcnow().isoformat()
 
         user_response = {
-            "id": str(user["_id"]),
-            "email": user["email"],
-            "name": user.get("profile", {}).get("name", email.split("@")[0]),
-            "last_login": datetime.utcnow().isoformat(),
+            "id": TEMP_USERS[email]["id"],
+            "email": email,
+            "name": email.split("@")[0],
+            "last_login": TEMP_USERS[email]["last_login"],
         }
 
-        logger.info(f"🔑 User logged in: {email}")
+        logger.info(f"🔑 User logged in (temporary): {email}")
 
         return jsonify({
             "success": True,
@@ -2458,9 +2457,8 @@ def login_user():
         }), 200
 
     except Exception as e:
-        logger.error(f" Login error: {str(e)}")
-        return jsonify({"error": "Login failed", "details": str(e)}), 500
-
+        logger.error(f"Login error: {str(e)}")
+        return jsonify({"error": "Login failed"}), 500
 
 @app.route("/api/auth/logout", methods=["POST"])
 def logout_user():
