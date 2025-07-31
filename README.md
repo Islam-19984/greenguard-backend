@@ -2,13 +2,23 @@ Project Overview
 
 GreenGuard is an AI-powered browser extension that detects, analyzes, and verifies corporate environmental claims in real-time. It empowers consumers to make informed sustainable choices by identifying greenwashing tactics and providing verified environmental information at the point of decision-making.
 
+This is my frontend:
+<img width="800" height="728" alt="Image" src="https://github.com/user-attachments/assets/9a19af20-5e49-4157-b31a-c8e679543e87" />
+<img width="790" height="586" alt="Image" src="https://github.com/user-attachments/assets/409c0272-a8f4-44e7-9a87-f5d9fc719118" />
+<img width="802" height="613" alt="Image" src="https://github.com/user-attachments/assets/a4e959d6-1c69-438d-9727-bc455d3493c5" />
+<img width="771" height="567" alt="Image" src="https://github.com/user-attachments/assets/68c3df61-a076-4e74-918b-b7810aae2eb7" />
+<img width="769" height="613" alt="Image" src="https://github.com/user-attachments/assets/3a93cc71-9a67-401a-a26e-5600b2300e3a" />
+<img width="825" height="608" alt="Image" src="https://github.com/user-attachments/assets/de049985-4fa7-468e-b3fe-11fc98fa0959" />
+<img width="851" height="646" alt="Image" src="https://github.com/user-attachments/assets/f8f4d935-3f61-4f0c-a2b8-66b62e04592d" />
+<img width="1366" height="768" alt="Image" src="https://github.com/user-attachments/assets/e5ce6102-352f-4d1c-9a94-40dbe47291da" />
+
 Defense Panel Feedback Implementation
 
 Feedback Received:
 - Enhanced NLP Integration: Panel requested implementation of BERT, spaCy, and HuggingFace transformers
 - Real-world Application: Demonstration of working environmental claim detection
 - Hybrid Detection Approach: Combination of rule-based and machine learning methods
-- **Performance Metrics: Clear confidence scoring and risk assessment
+- Performance Metrics: Clear confidence scoring and risk assessment
 
 Implementation Response:
 - BERT Integration: Implemented DistilBERT for environmental claim classification
@@ -24,7 +34,7 @@ Browser Extension Features:
 - Comprehensive Education Hub - Learn about the 7 sins of greenwashing and authentic sustainability
 - Company Verification System - Verify environmental claims from companies
 - Community Reporting- Report suspected greenwashing cases
-- Usage Statistics** - Track your impact in fighting greenwashing
+- Usage Statistics - Track your impact in fighting greenwashing
 
 Enhanced Backend NLP Features:
 - Environmental Claim Detection: Identifies environmental statements in text using BERT
@@ -146,7 +156,7 @@ How to Use
 
 Browser Extension Usage:
 
-#### Analyzer Tab:
+Analyzer Tab:
 - Click the Analyzer tab
 - Paste environmental claims in the text area
 - Click Analyze Claims
@@ -204,7 +214,7 @@ app.run(host='0.0.0.0', port=5001, debug=True)
 
 Issue 4: Extension Not Loading
 - Ensure Developer mode is enabled in Chrome
-- Check that you're selecting the correct `extension` folder
+- Check that you're selecting the correct extension folder
 - Refresh the extensions page after loading
 
 
@@ -253,4 +263,3 @@ Join the fight against greenwashing with GreenGuard!
 Every verified claim and reported case helps build a more transparent, sustainable future.
 
 Note: This system was developed and tested in response to feedback from the capstone defense panel, incorporating advanced NLP techniques for environmental claim verification.
- 
