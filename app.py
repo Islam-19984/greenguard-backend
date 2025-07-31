@@ -13,6 +13,15 @@ from bs4 import BeautifulSoup
 import requests
 
 try:
+    from enhanced_nlp_processor import EnhancedNLPProcessor
+    ENHANCED_NLP_AVAILABLE = True
+    print(" Enhanced NLP processor with "
+          "BERT/spaCy/HuggingFace loaded successfully")
+except ImportError as e:
+    print(f" Enhanced NLP processor error: {e}")
+    ENHANCED_NLP_AVAILABLE = False
+
+try:
     from blockchain_verification import (
         add_verification_to_blockchain,
         add_claim_analysis_to_blockchain,
@@ -68,8 +77,6 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
-TEMP_USERS = {}
-MONGODB_CONNECTED = False
 
 
 @app.after_request
@@ -100,39 +107,28 @@ def rate_limit_check(identifier):
     return True
 
 
-MONGO_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017/")
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
 DATABASE_NAME = os.getenv("DATABASE_NAME", "greenguard_db")
 
 try:
-    client = MongoClient(MONGO_URI, tlsInsecure=True)
+    client = MongoClient(MONGO_URI)
     db = client[DATABASE_NAME]
     client.admin.command("ismaster")
     logger.info(" Connected to MongoDB successfully")
 except Exception as e:
     logger.error(f" Failed to connect to MongoDB: {e}")
-    logger.info(" Running without MongoDB - Using temporary storage")
-    client = None
-    db = None
-    MONGODB_CONNECTED = False
+    exit(1)
 
-if MONGODB_CONNECTED:
-    companies_collection = db.companies
-    claims_collection = db.claims
-    verifications_collection = db.verifications
-    user_submissions_collection = db.user_submissions
-    alternatives_collection = db.alternatives
-    users_collection = db.users
-    website_analyses_collection = db.website_analyses
-else:
-    companies_collection = None
-    claims_collection = None
-    verifications_collection = None
-    user_submissions_collection = None
-    alternatives_collection = None
-    users_collection = None
-    website_analyses_collection = None
-    logger.info(" Database collections set to None - using fallback storage")
+companies_collection = db.companies
+claims_collection = db.claims
+verifications_collection = db.verifications
+user_submissions_collection = db.user_submissions
+alternatives_collection = db.alternatives
+users_collection = db.users
+website_analyses_collection = db.website_analyses
 
+certification_verifier = None
+emissions_verifier = None
 
 if ENHANCED_VERIFICATION_AVAILABLE:
     try:
@@ -196,6 +192,20 @@ if SMART_CONTRACTS_AVAILABLE and SmartContractBlockchain is not None:
 else:
     logger.info(" Smart contracts integrated in blockchain verification "
                 "system")
+enhanced_nlp = None
+if ENHANCED_NLP_AVAILABLE:
+    try:
+        enhanced_nlp = EnhancedNLPProcessor()
+        print(" Enhanced NLP processor initialized "
+              "with BERT, spaCy, and HuggingFace Transformers")
+        nlp_status = enhanced_nlp.get_nlp_status()
+        print(f" NLP Status: spaCy={nlp_status['spacy_available']}, "
+              f"BERT={nlp_status['bert_available']}, "
+              f"Sentiment={nlp_status['sentiment_available']}")
+    except Exception as e:
+        logger.error(f" Enhanced NLP initialization failed: {str(e)}")
+        enhanced_nlp = None
+        ENHANCED_NLP_AVAILABLE = False
 
 
 def is_valid_url(url):
@@ -419,7 +429,7 @@ class EnhancedUniversalCompanyAnalyzer:
             },
         }
 
-        logger.info("🌍 Enhanced Universal Company Analyzer initialized with "
+        logger.info(" Enhanced Universal Company Analyzer initialized with "
                     "200+ companies")
 
     def analyze_company(self, company_name):
@@ -445,7 +455,7 @@ class EnhancedUniversalCompanyAnalyzer:
                 analysis["found_in_database"] = True
                 analysis["sustainability_score"] = score
                 analysis["confidence_level"] = "high"
-                logger.info(f"✅ Found {company_name} in sustainability "
+                logger.info(f" Found {company_name} in sustainability "
                             f"database with score {score}")
                 break
 
@@ -453,7 +463,7 @@ class EnhancedUniversalCompanyAnalyzer:
         analysis["final_score"] = final_score
         analysis["confidence_level"] = self._calculate_confidence(analysis)
 
-        logger.info(f"🔍 Company analysis for '{company_name}': "
+        logger.info(f" Company analysis for '{company_name}': "
                     f"{final_score:.2f} ({analysis['confidence_level']} "
                     f"confidence)")
 
@@ -610,7 +620,7 @@ class EnhancedClaimDetector:
             "renewable", "biodegradable", "organic", "recycled", "recyclable",
             "zero waste", "climate positive", "climate neutral",
             "earth friendly",
-            "environmentally responsible", "natural", "clean energy",
+            "environmentally responsible", "natural", "clean enery",
             "clean technology",
             "circular economy", "carbon footprint", "renewable energy",
             "solar power",
@@ -619,8 +629,8 @@ class EnhancedClaimDetector:
 
         self.greenwashing_indicators = {
             "vague_terms": {
-                "keywords": ["eco", "green", "natural", "pure", "clean",
-                             "fresh"],
+                "keywords": ["eco", "green", "natural", "pure",
+                             "clean", "fresh"],
                 "risk_weight": 1.5,
                 "description": "Vague environmental claims without specifics",
             },
@@ -632,9 +642,36 @@ class EnhancedClaimDetector:
             },
         }
 
-        logger.info(" Enhanced AI Claim Detector initialized")
+        logger.info(" Enhanced AI Claim Detector initialized "
+                    "with hybrid approach")
 
     def detect_claims(self, text):
+        try:
+            rule_based_claims = self._detect_claims_rule_based(text)
+            if ENHANCED_NLP_AVAILABLE and enhanced_nlp:
+                try:
+                    nlp_analysis = enhanced_nlp.analyze_text_comprehensive(
+                        text)
+                    bert_claims = nlp_analysis.get('bert_claims', [])
+                    combined_claims = self._merge_claim_results(
+                        rule_based_claims, bert_claims, nlp_analysis)
+                    logger.info(f" Hybrid detection: "
+                                f"{len(rule_based_claims)} rule-based + "
+                                f"{len(bert_claims)} BERT claims = "
+                                f"{len(combined_claims)} total claims")
+                    return combined_claims
+                except Exception as e:
+                    logger.error(f" Enhanced NLP analysis failed, "
+                                 f" falling back to rule-based: {e}")
+                    return rule_based_claims
+            else:
+                logger.info(" Using rule-based detection only (Enhanced NLP not available)")
+                return rule_based_claims
+        except Exception as e:
+            logger.error(f" Claim detection error: {e}")
+            return []
+
+    def _detect_claims_rule_based(self, text):
         if not text or len(text.strip()) < 10:
             return []
 
@@ -650,8 +687,97 @@ class EnhancedClaimDetector:
             if claim_data:
                 claims.append(claim_data)
 
-        logger.info(f" Detected {len(claims)} environmental claims in text")
         return claims
+
+    def _merge_claim_results(self, rule_based_claims, bert_claims,
+                             nlp_analysis):
+        try:
+            merged_claims = []
+            for claim in rule_based_claims:
+                enhanced_claim = {
+                    "text": claim["text"],
+                    "keywords": claim.get("keywords", []),
+                    "confidence": claim.get("confidence", 0.5),
+                    "greenwashing_risk": claim.get("greenwashing_risk", 0.3),
+                    "specificity_score": claim.get("specificity_score", 0.5),
+                    "detection_method": "rule_based",
+                    "bert_analysis": None,
+                    "spacy_entities": [],
+                    "enhanced_nlp": False
+                }
+                merged_claims.append(enhanced_claim)
+            for bert_claim in bert_claims:
+                matched = False
+                for merged_claim in merged_claims:
+                    if self._claims_overlap(merged_claim["text"],
+                                            bert_claim["text"]):
+                        merged_claim["bert_analysis"] = {
+                            "bert_classification": bert_claim.get(
+                                "bert_classification"),
+                            "sentiment": bert_claim.get("sentiment"),
+                            "entities": bert_claim.get("entities", [])
+                        }
+                        merged_claim["spacy_entities"] = bert_claim.get(
+                            "entities", [])
+                        merged_claim["enhanced_nlp"] = True
+                        merged_claim["confidence"] = max(
+                            merged_claim["confidence"],
+                            bert_claim.get("confidence_score", 0.5)
+                        )
+                        bert_risk = bert_claim.get("greenwashing_risk", 0.3)
+                        merged_claim["greenwashing_risk"] = (
+                            merged_claim["greenwashing_risk"] + bert_risk) / 2
+                        merged_claim["specificity_score"] = max(
+                            merged_claim["specificity_score"],
+                            bert_claim.get("specificity_score", 0.5)
+                        )
+                        matched = True
+                        break
+                if not matched:
+                    new_claim = {
+                        "text": bert_claim["text"],
+                        "keywords": bert_claim.get(
+                            "environmental_keywords", []),
+                        "confidence": bert_claim.get("confidence_score", 0.5),
+                        "greenwashing_risk": bert_claim.get(
+                            "greenwashing_risk", 0.3),
+                        "specificity_score": bert_claim.get(
+                            "specificity_score", 0.5),
+                        "detection_method": "bert_nlp",
+                        "bert_analysis": {
+                            "bert_classification": bert_claim.get(
+                                "bert_classification"),
+                            "sentiment": bert_claim.get("sentiment"),
+                            "entities": bert_claim.get("entities", [])
+                        },
+                        "spacy_entities": bert_claim.get("entities", []),
+                        "enhanced_nlp": True
+                    }
+                    merged_claims.append(new_claim)
+            for claim in merged_claims:
+                claim["nlp_analysis_available"] = True
+                claim["spacy_preprocessing"] = nlp_analysis.get(
+                    "spacy_analysis", {}).get("spacy_analysis", False)
+                claim["total_entities_detected"] = len(nlp_analysis.get(
+                    "spacy_analysis", {}).get("entities", []))
+            return merged_claims
+        except Exception as e:
+            logger.error(f" Claim merging error: {e}")
+            return rule_based_claims
+
+    def _claims_overlap(self, text1, text2, threshold=0.6):
+        """Check if two claim texts overlap significantly"""
+        try:
+            words1 = set(text1.lower().split())
+            words2 = set(text2.lower().split())
+            if not words1 or not words2:
+                return False
+            intersection = len(words1.intersection(words2))
+            union = len(words1.union(words2))
+            overlap_ratio = intersection / union if union > 0 else 0
+            return overlap_ratio >= threshold
+        except Exception:
+            return False
 
     def _analyze_sentence(self, sentence):
         sentence_lower = sentence.lower()
@@ -664,8 +790,8 @@ class EnhancedClaimDetector:
         if not matched_keywords:
             return None
 
-        confidence = self._calculate_confidence(sentence_lower,
-                                                matched_keywords)
+        confidence = self._calculate_confidence(
+            sentence_lower, matched_keywords)
         greenwashing_risk = self._assess_greenwashing_risk(sentence_lower)
 
         return {
@@ -681,11 +807,10 @@ class EnhancedClaimDetector:
         keyword_bonus = min(0.40, len(keywords) * 0.10)
         specific_terms = ["certified", "verified", "measured", "tested",
                           "audited"]
-        specificity_bonus = 0.20 if any(term in sentence for term in
-                                        specific_terms) else 0
-        number_bonus = 0.15 if re.search(r"\d+%|\d+\s*"
-                                         "(tons?|kg|pounds?|mw|gwh)",
-                                         sentence) else 0
+        specificity_bonus = 0.20 if any(
+            term in sentence for term in specific_terms) else 0
+        number_bonus = 0.15 if re.search(
+            r"\d+%|\d+\s*(tons?|kg|pounds?|mw|gwh)", sentence) else 0
 
         confidence = base_confidence + keyword_bonus + specificity_bonus
         + number_bonus
@@ -704,8 +829,8 @@ class EnhancedClaimDetector:
         if risk_factors == 0:
             return 0.15
 
-        normalized_risk = min(0.90, total_risk / (len(sentence.split())
-                                                  + risk_factors))
+        normalized_risk = min(0.90, total_risk / (
+            len(sentence.split()) + risk_factors))
         return round(normalized_risk, 2)
 
     def _calculate_specificity(self, sentence):
@@ -717,8 +842,8 @@ class EnhancedClaimDetector:
         if re.search(r"\d+\s*(tons?|kg|pounds?|mw|gwh)", sentence):
             specificity_score += 0.20
 
-        certifications = ["iso", "leed", "energy star", "certified",
-                          "verified", "audited"]
+        certifications = [
+            "iso", "leed", "energy star", "certified", "verified", "audited"]
         if any(cert in sentence for cert in certifications):
             specificity_score += 0.25
 
@@ -777,7 +902,7 @@ def enhanced_universal_verification(claim_text, company_name):
             verification_score, company_analysis, claim_analysis,
             claim_text, enhanced_results)
 
-        logger.info(f"🎯 Enhanced verification for {company_name}: "
+        logger.info(f" Enhanced verification for {company_name}: "
                     f"{verification_score:.1%} ({status_info['status']})")
 
         return {
@@ -825,7 +950,7 @@ def enhanced_universal_verification(claim_text, company_name):
         }
 
     except Exception as e:
-        logger.error(f"❌ Error in enhanced verification: {str(e)}")
+        logger.error(f" Error in enhanced verification: {str(e)}")
         return create_fallback_verification(company_name, claim_text, str(e))
 
 
@@ -1101,7 +1226,7 @@ def generate_comprehensive_evidence(company_analysis, claim_analysis, score,
 
     if company_analysis["found_in_database"]:
         evidence_parts.append(
-            "✅ Company found in sustainability leadership database")
+            " Company found in sustainability leadership database")
     else:
         evidence_parts.append(
             " Company analyzed using universal verification system")
@@ -1110,7 +1235,7 @@ def generate_comprehensive_evidence(company_analysis, claim_analysis, score,
         cert_analysis = enhanced_results["certification_analysis"]
         verified_certs = cert_analysis.get("verified_certifications", [])
         if verified_certs:
-            evidence_parts.append(f"🏆 {len(verified_certs)} verified "
+            evidence_parts.append(f" {len(verified_certs)} verified "
                                   f"certifications found")
         else:
             evidence_parts.append(
@@ -1334,6 +1459,46 @@ def calculate_credibility_score(content, feedback_type):
     return round(min(1.0, base_score), 2)
 
 
+@app.route("/api/nlp/status", methods=["GET"])
+def get_nlp_status():
+    """Get current status of enhanced NLP capabilities"""
+    try:
+        if ENHANCED_NLP_AVAILABLE and enhanced_nlp:
+            nlp_status = enhanced_nlp.get_nlp_status()
+            return jsonify({
+                "success": True,
+                "enhanced_nlp_available": True,
+                "nlp_components": nlp_status,
+                "capabilities": {
+                    "spacy_preprocessing": nlp_status["spacy_available"],
+                    "bert_classification": nlp_status["bert_available"],
+                    "sentiment_analysis": nlp_status["sentiment_available"],
+                    "transformers_integration": nlp_status[
+                        "transformers_available"],
+                    "linguistic_analysis": nlp_status["spacy_available"],
+                    "named_entity_recognition": nlp_status["spacy_available"],
+                    "advanced_claim_detection": nlp_status["bert_available"]
+                },
+                "system_status": "fully_operational" if nlp_status[
+                    "system_ready"] else "partial",
+                "last_updated": datetime.utcnow().isoformat()
+            })
+        else:
+            return jsonify({
+                "success": True,
+                "enhanced_nlp_available": False,
+                "message": "Enhanced NLP features not available - using "
+                "rule-based approach only",
+                "fallback_mode": True
+            })
+    except Exception as e:
+        logger.error(f" NLP status check error: {e}")
+        return jsonify({
+            "error": "Failed to get NLP status",
+            "details": str(e)
+        }), 500
+
+
 @app.route("/api/enhanced-verification", methods=["POST"])
 def enhanced_verification_endpoint():
     client_ip = request.environ.get(
@@ -1372,6 +1537,38 @@ def enhanced_verification_endpoint():
 
         verification_results = enhanced_verification_with_smart_contracts(
             claim_text, company_name, user_email)
+        nlp_analysis_info = {}
+        if ENHANCED_NLP_AVAILABLE and enhanced_nlp:
+            try:
+                comprehensive_nlp = enhanced_nlp.analyze_text_comprehensive(
+                    claim_text)
+                nlp_analysis_info = {
+                    "spacy_entities": comprehensive_nlp.get(
+                        "spacy_analysis", {}).get("entities", []),
+                    "bert_classification_available": True,
+                    "sentiment_analysis_available":
+                        enhanced_nlp.sentiment_analyzer is not None,
+                    "total_nlp_claims": comprehensive_nlp.get(
+                        "nlp_metrics", {}).get("total_claims_detected", 0),
+                    "nlp_confidence": comprehensive_nlp.get(
+                        "nlp_metrics", {}).get("average_confidence", 0),
+                    "nlp_risk_assessment": comprehensive_nlp.get(
+                        "nlp_metrics", {}).get("average_greenwashing_risk", 0),
+                    "entities_detected": comprehensive_nlp.get(
+                        "nlp_metrics", {}).get("entities_found", 0),
+                    "processing_method": comprehensive_nlp.get
+                    ("processing_method", "rule_based"),
+                    "processing_time_ms": comprehensive_nlp.get(
+                        "processing_time_ms", 0)
+                }
+                logger.info(f" Enhanced NLP analysis completed for "
+                            f"{company_name}: "
+                            f"{nlp_analysis_info['total_nlp_claims']} "
+                            f" claims detected")
+            except Exception as e:
+                logger.error(f" Enhanced NLP analysis error: {e}")
+                nlp_analysis_info = {
+                    "error": "NLP analysis failed", "fallback_used": True}
 
         verification_doc = {
             "claim_text": claim_text,
@@ -1522,7 +1719,23 @@ def enhanced_verification_endpoint():
                 "analysis_type": "complete_enhanced_verification",
                 "processing_time": "< 3 seconds",
                 "timestamp": datetime.utcnow().isoformat(),
-            },
+                "enhanced_nlp_analysis": nlp_analysis_info,
+                "nlp_capabilities": {
+                    "spacy_available": ENHANCED_NLP_AVAILABLE and enhanced_nlp and enhanced_nlp.nlp is not None,
+                    "bert_available": ENHANCED_NLP_AVAILABLE and enhanced_nlp and enhanced_nlp.greenwashing_classifier is not None,
+                    "sentiment_available": ENHANCED_NLP_AVAILABLE and enhanced_nlp and enhanced_nlp.sentiment_analyzer is not None,
+                    "transformers_available": ENHANCED_NLP_AVAILABLE,
+                    "hybrid_detection": ENHANCED_NLP_AVAILABLE,
+                    "linguistic_analysis": ENHANCED_NLP_AVAILABLE and enhanced_nlp and enhanced_nlp.nlp is not None
+                },
+                "detection_methods": {
+                    "rule_based": True,
+                    "bert_transformer": ENHANCED_NLP_AVAILABLE and enhanced_nlp and enhanced_nlp.greenwashing_classifier is not None,
+                    "spacy_nlp": ENHANCED_NLP_AVAILABLE and enhanced_nlp and enhanced_nlp.nlp is not None,
+                    "sentiment_analysis": ENHANCED_NLP_AVAILABLE and enhanced_nlp and enhanced_nlp.sentiment_analyzer is not None,
+                    "hybrid_approach": ENHANCED_NLP_AVAILABLE
+                }
+            }
         }
 
         logger.info(f" Complete enhanced verification completed: "
@@ -2391,25 +2604,32 @@ def register_user():
         if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", email):
             return jsonify({"error": "Invalid email format"}), 400
 
-        if email in TEMP_USERS:
+        existing_user = users_collection.find_one({"email": email})
+        if existing_user:
             return jsonify({"error": "User already exists"}), 409
 
-        TEMP_USERS[email] = {
+        user_data = {
             "email": email,
             "password": password,
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.utcnow(),
             "is_active": True,
-            "id": f"temp_{len(TEMP_USERS) + 1}"
+            "profile": {
+                "name": email.split("@")[0],
+                "preferences": {"notifications": True,
+                                "analysis_level": "medium"},
+            },
         }
+
+        result = users_collection.insert_one(user_data)
 
         user_response = {
-            "id": TEMP_USERS[email]["id"],
+            "id": str(result.inserted_id),
             "email": email,
-            "name": email.split("@")[0],
-            "created_at": TEMP_USERS[email]["created_at"],
+            "name": user_data["profile"]["name"],
+            "created_at": user_data["created_at"].isoformat(),
         }
 
-        logger.info(f"👤 New user registered (temporary): {email}")
+        logger.info(f"👤 New user registered: {email}")
 
         return jsonify({
             "success": True,
@@ -2418,8 +2638,10 @@ def register_user():
         }), 201
 
     except Exception as e:
-        logger.error(f"Registration error: {str(e)}")
-        return jsonify({"error": "Registration failed"}), 500
+        logger.error(f" Registration error: {str(e)}")
+        return jsonify({"error": "Registration failed",
+                        "details": str(e)}), 500
+
 
 @app.route("/api/auth/login", methods=["POST"])
 def login_user():
@@ -2432,25 +2654,28 @@ def login_user():
         email = data["email"].lower().strip()
         password = data["password"]
 
-        if email not in TEMP_USERS:
+        user = users_collection.find_one({"email": email})
+        if not user:
             return jsonify({"error": "Invalid credentials"}), 401
 
-        if TEMP_USERS[email]["password"] != password:
+        if user["password"] != password:
             return jsonify({"error": "Invalid credentials"}), 401
 
-        if not TEMP_USERS[email].get("is_active", True):
+        if not user.get("is_active", True):
             return jsonify({"error": "Account is deactivated"}), 401
 
-        TEMP_USERS[email]["last_login"] = datetime.utcnow().isoformat()
+        users_collection.update_one(
+            {"_id": user["_id"]}, {"$set": {"last_login": datetime.utcnow()}}
+        )
 
         user_response = {
-            "id": TEMP_USERS[email]["id"],
-            "email": email,
-            "name": email.split("@")[0],
-            "last_login": TEMP_USERS[email]["last_login"],
+            "id": str(user["_id"]),
+            "email": user["email"],
+            "name": user.get("profile", {}).get("name", email.split("@")[0]),
+            "last_login": datetime.utcnow().isoformat(),
         }
 
-        logger.info(f"🔑 User logged in (temporary): {email}")
+        logger.info(f"🔑 User logged in: {email}")
 
         return jsonify({
             "success": True,
@@ -2459,8 +2684,9 @@ def login_user():
         }), 200
 
     except Exception as e:
-        logger.error(f"Login error: {str(e)}")
-        return jsonify({"error": "Login failed"}), 500
+        logger.error(f" Login error: {str(e)}")
+        return jsonify({"error": "Login failed", "details": str(e)}), 500
+
 
 @app.route("/api/auth/logout", methods=["POST"])
 def logout_user():
@@ -2500,8 +2726,8 @@ def health_check():
         "database": db_status,
         "blockchain": blockchain_status,
         "smart_contracts": smart_contract_status,
-        "enhanced_verification": "operational"
-        if ENHANCED_VERIFICATION_AVAILABLE else "disabled",
+        "enhanced_verification":
+            "operational" if ENHANCED_VERIFICATION_AVAILABLE else "disabled",
         "features": {
             "universal_company_verification": True,
             "enhanced_ai_analysis": True,
@@ -2521,22 +2747,27 @@ def health_check():
             "certification_verification": ENHANCED_VERIFICATION_AVAILABLE,
             "emissions_cross_reference": ENHANCED_VERIFICATION_AVAILABLE,
             "third_party_verification": ENHANCED_VERIFICATION_AVAILABLE,
-            "comprehensive_database_integration":
-                ENHANCED_VERIFICATION_AVAILABLE,
+            "comprehensive_database_integration": ENHANCED_VERIFICATION_AVAILABLE
         },
+        "enhanced_nlp_processing": ENHANCED_NLP_AVAILABLE,
+        "spacy_linguistic_analysis": (ENHANCED_NLP_AVAILABLE and enhanced_nlp and enhanced_nlp.nlp is not None),
+        "bert_classification": (ENHANCED_NLP_AVAILABLE and enhanced_nlp and enhanced_nlp.greenwashing_classifier is not None),
+        "sentiment_analysis": (ENHANCED_NLP_AVAILABLE and enhanced_nlp and enhanced_nlp.sentiment_analyzer is not None),
+        "transformers_integration": ENHANCED_NLP_AVAILABLE,
+        "named_entity_recognition": (ENHANCED_NLP_AVAILABLE and enhanced_nlp and enhanced_nlp.nlp is not None),
+        "hybrid_detection_system": ENHANCED_NLP_AVAILABLE,
+        "advanced_text_preprocessing": ENHANCED_NLP_AVAILABLE,
         "smart_contract_info": {
             "enabled": smart_blockchain is not None,
-            "deployed_contracts": len(essential_contracts) if smart_blockchain
-            else 0,
-            "contract_types": list(essential_contracts.keys()) if
-            smart_blockchain else [],
-            "automation_active": smart_blockchain is not None,
+            "deployed_contracts": len(essential_contracts) if smart_blockchain else 0,
+            "contract_types": list(essential_contracts.keys()) if smart_blockchain else [],
+            "automation_active": smart_blockchain is not None
         },
         "enhanced_verification_info": {
             "certification_verifier": certification_verifier is not None,
             "emissions_verifier": emissions_verifier is not None,
             "database_integration": ENHANCED_VERIFICATION_AVAILABLE,
-            "third_party_sources": ENHANCED_VERIFICATION_AVAILABLE,
+            "third_party_sources": ENHANCED_VERIFICATION_AVAILABLE
         },
         "endpoints": {
             "auth_register": "/api/auth/register",
@@ -2544,7 +2775,7 @@ def health_check():
             "auth_logout": "/api/auth/logout",
             "claims_detect": "/api/claims/detect",
             "claims_verify": "/api/claims/verify",
-            "enhanced_verification": "/api/enhanced-verification",  # NEW
+            "enhanced_verification": "/api/enhanced-verification",
             "companies_verify": "/api/companies/verify",
             "community": "/api/community/submit",
             "analytics": "/api/analytics/stats",
@@ -2554,7 +2785,8 @@ def health_check():
             "smart_contracts_stats": "/api/smart-contracts/stats",
             "smart_contracts_execute": "/api/smart-contracts/execute",
             "clear_data": "/api/clear-data",
-        },
+            "nlp_status": "/api/nlp/status"
+        }
     })
 
 
@@ -2629,7 +2861,7 @@ def init_database():
         logger.info(" Enhanced database indexes created successfully")
 
     except Exception as e:
-        logger.warning(f"⚠️ Index creation warning: {e}")
+        logger.warning(f" Index creation warning: {e}")
 
 
 @app.errorhandler(404)
@@ -2678,7 +2910,7 @@ if __name__ == "__main__":
 
     port = int(os.getenv("PORT", 5000))
     debug = os.getenv("FLASK_ENV") == "development"
-    host = os.getenv("HOST", "0.0.0.0")
+    host = os.getenv("HOST", "127.0.0.1")
 
     logger.info(
         f" Starting Complete Enhanced GreenGuard Universal "
@@ -2690,6 +2922,19 @@ if __name__ == "__main__":
     logger.info(
         f" Enhanced Verification: "
         f"{' Enabled' if ENHANCED_VERIFICATION_AVAILABLE else ' Disabled'}")
+    logger.info(f" Enhanced NLP: "
+                f"{' Enabled' if ENHANCED_NLP_AVAILABLE else ' Disabled'}")
+
+    if ENHANCED_NLP_AVAILABLE and enhanced_nlp:
+        nlp_status = enhanced_nlp.get_nlp_status()
+        logger.info(f" spaCy Linguistic Analysis: "
+                    f"{' Active' if nlp_status['spacy_available'] else 'Inactive'}")
+        logger.info(f" BERT Classification: "
+                    f"{' Active' if nlp_status['bert_available'] else ' Inactive'}")
+        logger.info(f" Sentiment Analysis: "
+                    f"{' Active' if nlp_status['sentiment_available'] else ' Inactive'}")
+        logger.info(f" HuggingFace Transformers: "
+                    f"{' Active' if nlp_status['transformers_available'] else ' Inactive'}")
 
     if ENHANCED_VERIFICATION_AVAILABLE:
         logger.info(" Enhanced Certification Verifier:  Active")
@@ -2703,7 +2948,17 @@ if __name__ == "__main__":
                 "Greenwashing Detection, Automated Enforcement, "
                 "Certification Verification, "
                 "Emissions Cross-Reference, Third-party Database Integration")
+    logger.info(" Complete Enhanced Features: Universal Company Support, "
+                "Advanced AI Analysis, Global Verification, "
+                "Blockchain Transparency, Smart Contract Automation, "
+                "Real-time Statistics, Website Environmental Analysis, "
+                "Content Scraping, Greenwashing Detection, "
+                "Automated Enforcement, "
+                "Certification Verification, Emissions Cross-Reference, "
+                "Third-party Database Integration, "
+                " spaCy Linguistic Analysis,  BERT Text Classification, "
+                " Sentiment Analysis,  HuggingFace Transformers, "
+                " Named Entity Recognition,  Advanced Text Preprocessing")
 
     if __name__ == "__main__":
-
         app.run(host=host, port=port, debug=debug)
