@@ -60,7 +60,7 @@ Installation Instructions
 Backend API Setup
 
 Step 1: Clone Repository
-git clone https://github.com/Islam-19984/Lastyear_Capston_Backup.git
+git clone https://github.com/Islam-19984/greenguard-backend.git
 cd greenguard-mvp-backup then cd backend
 
 Step 2: Create Virtual Environment
@@ -210,8 +210,8 @@ Issue 4: Extension Not Loading
 
 Model Performance:
 - BERT Classification: F1-Score 0.82
-- **spaCy NER: 95%+ entity recognition accuracy
-- **Sentiment Analysis**: 88%+ sentiment classification accuracy
+- spaCy NER: 95%+ entity recognition accuracy
+- Sentiment Analysis: 88%+ sentiment classification accuracy
 
 Recommendations
 
@@ -242,12 +242,10 @@ Support
 
 For technical support or questions:
 - Email: islamomar2095@gmail.com
-- GitHub Issues: Create an issue in this repository
-- Video Demo: https://youtu.be/xPr6uuZw5es
 
 Links
 
-- GitHub Repository: https://github.com/Islam-19984/Lastyear_Capston_Backup.git
+- GitHub Repository: https://github.com/Islam-19984/greenguard-backend.git
 
 
 Join the fight against greenwashing with GreenGuard!
